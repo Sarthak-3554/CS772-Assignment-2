@@ -1,108 +1,76 @@
-# CS772 Assignment 2 — Implementing and Analyzing Variational Autoencoder (VAE)
+# devops-agent
 
-This assignment implements and analyzes a **Variational Autoencoder (VAE)** using PyTorch on the **MNIST handwritten digit dataset**.
+A CLI tool that lets you talk to Git and your terminal in plain English.
+Instead of remembering commands, just say what you want:
 
-The assignment focuses not only on implementing a VAE, but also on understanding its mathematical objective, comparing different KL-divergence estimation strategies, studying the effect of the $\beta$ parameter, analyzing posterior collapse, and investigating the geometry of the learned latent space.
+```
+> push my changes to main
+> what's my git status?
+> install git and stage my changes
+```
 
----
+The agent figures out which command to run and does it for you.
 
-## Objectives
+## How it works
 
-The main objectives of this assignment are:
+1. You type a request in plain English.
+2. An LLM decides which tool to use (git push, git status, run a shell
+   command, etc.) and with what arguments.
+3. The tool runs, and the result is shown to you.
+4. If something fails, the agent tries to fix it and retry — automatically.
 
-- Understand the **Evidence Lower Bound (ELBO)** objective used to train VAEs.
-- Derive and implement the **reconstruction loss**.
-- Derive the **closed-form KL divergence** between two Gaussian distributions.
-- Implement the **reparameterization trick** for differentiable sampling.
-- Train a VAE on MNIST and analyze its reconstruction and KL losses.
-- Compare **closed-form KL** with a **Monte Carlo KL approximation**.
-- Study the effect of different $\beta$ values using a **$\beta$-VAE**.
-- Investigate **posterior collapse** in latent dimensions.
-- Analyze the geometry of the learned latent space using interpolation.
-- Visualize the latent space using a 2-dimensional VAE.
+## Features
 
----
+- **Natural language commands** — no need to memorize git or shell syntax.
+- **Safe by default** — anything risky (like `git push` or an unrecognized
+  shell command) asks for your confirmation before running.
+- **Sandboxed shell** — shell commands run inside an isolated Docker
+  container, not directly on your computer. So even if something goes
+  wrong, it can't damage your actual machine.
+- **Self-correcting** — if a command fails, the agent reads the error and
+  tries a fix on its own.
+- **Works with multiple AI providers** — OpenAI, Groq, Anthropic, etc. Just
+  change one line in the config.
 
-## Dataset
+## Setup
 
-The experiments use the **MNIST handwritten digit dataset**.
+**1. Install dependencies**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-- Training samples: 60,000
-- Test samples: 10,000
-- Image size: $28 \times 28$
-- Image type: Grayscale
-- Pixel values: Normalized to $[0,1]$
+**2. Add your API key**
 
-The dataset is automatically downloaded using `torchvision.datasets.MNIST`.
+Copy `.env.example` to `.env` and fill in your model + API key:
+```
+MODEL=groq/openai/gpt-oss-120b
+GROQ_API_KEY=your_key_here
+```
 
----
+**3. Build the sandbox** (one-time setup)
+```bash
+docker build -t devops-agent-sandbox:latest -f Dockerfile.sandbox .
+```
+This creates the isolated container that shell commands will run inside.
+Make sure Docker Desktop is installed and running first.
 
-## VAE Formulation
+**4. Run it**
+```bash
+python3 main.py
+```
 
-The VAE assumes the latent-variable model
+Then just type what you want:
+```
+> git status
+> push my changes to main
+```
 
-$$
-p_\theta(x,z) = p_\theta(x|z)p(z)
-$$
+## What's not done yet
 
-where the prior over the latent variable is
-
-$$
-p(z) = \mathcal{N}(0,I).
-$$
-
-The encoder learns an approximate posterior
-
-$$
-q_\phi(z|x)
-=
-\mathcal{N}
-\left(
-\mu_\phi(x),
-\operatorname{diag}(\sigma_\phi^2(x))
-\right).
-$$
-
-The VAE is trained by maximizing the **Evidence Lower Bound (ELBO)**:
-
-$$
-\mathcal{L}(\theta,\phi;x)
-=
-\mathbb{E}_{q_\phi(z|x)}
-[\log p_\theta(x|z)]
--
-D_{KL}
-\left(
-q_\phi(z|x)\|p(z)
-\right).
-$$
-
-The implementation therefore consists of two major loss components:
-
-1. Reconstruction loss
-2. KL-divergence regularization
-
----
-
-## Model Architecture
-
-The VAE consists of an encoder, a latent representation, and a decoder.
-
-### Encoder
-
-The input MNIST image is flattened from $28 \times 28$ into 784 dimensions.
-
-```text
-784
- ↓
-Linear(784 → 512)
- ↓
-ReLU
- ↓
-Linear(512 → 256)
- ↓
-ReLU
- ↓
- ┌───────────────┐
- ↓               ↓
-μ             log(σ²)
+- No logging/history of past commands yet.
+- No automated test suite that scores the agent's accuracy — just manual
+  testing and unit tests so far.
+- No memory between separate runs — each time you start `main.py`, it
+  starts fresh.
